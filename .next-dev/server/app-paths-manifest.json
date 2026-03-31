@@ -1,0 +1,7 @@
+{
+  "/api/contacts/[id]/route": "app/api/contacts/[id]/route.js",
+  "/contacts/page": "app/contacts/page.js",
+  "/profile/page": "app/profile/page.js",
+  "/capture/page": "app/capture/page.js",
+  "/contacts/[id]/page": "app/contacts/[id]/page.js"
+}
