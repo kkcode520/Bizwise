@@ -1,5 +1,7 @@
 # BizWise
 
+[English](./README.md) | [简体中文](./README.zh-CN.md)
+
 BizWise is a mobile-first AI business card assistant for capturing contacts, storing structured card data, and preparing better follow-up conversations.
 
 This repository is not a zero-config demo. To run it successfully, you need your own MySQL database, AI provider credentials, and an Azure Blob container SAS URL.
