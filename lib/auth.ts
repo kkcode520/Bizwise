@@ -17,7 +17,15 @@ type UserRow = RowDataPacket & {
 };
 
 function getAuthSecret() {
-  return process.env.AUTH_SECRET || process.env.AI_API_KEY || "bizwise-dev-secret";
+  if (process.env.AUTH_SECRET) {
+    return process.env.AUTH_SECRET;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("AUTH_SECRET is required in production");
+  }
+
+  return "bizwise-dev-secret";
 }
 
 function encodeBase64Url(input: string) {

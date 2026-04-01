@@ -107,11 +107,11 @@ export function resolveCardImageUrl(cardImage?: string | null) {
     return cardImage;
   }
 
-  if (cardImage.includes("blob.core.windows.net")) {
-    return buildSignedBlobUrl(cardImage);
-  }
-
   return cardImage;
+}
+
+export function getSignedBlobReadUrl(blobUrl: string) {
+  return buildSignedBlobUrl(blobUrl);
 }
 
 export function getStoredCardImageValue(cardImage?: string | null) {

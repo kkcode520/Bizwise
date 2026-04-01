@@ -25,6 +25,11 @@ export default async function ContactDetailPage({
 
   const insight = await getInsightById(id);
   const editMode = resolvedSearchParams?.edit === "1";
+  const cardImageSrc = contact.cardImage
+    ? contact.cardImage.startsWith("data:")
+      ? contact.cardImage
+      : `/api/contacts/${id}/card-image`
+    : "https://placehold.co/1200x760/f4efe6/6c6458?text=No+Card+Image";
 
   return (
     <>
@@ -58,7 +63,7 @@ export default async function ContactDetailPage({
 
           <section className="panel" style={{ padding: 18 }}>
             <img
-              src={contact.cardImage || "https://placehold.co/1200x760/f4efe6/6c6458?text=No+Card+Image"}
+              src={cardImageSrc}
               alt={`${contact.name} business card`}
               style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 22, minHeight: 320 }}
             />
