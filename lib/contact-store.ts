@@ -289,6 +289,58 @@ export async function createContact(
   return contact;
 }
 
+export async function findDuplicateContact(input: {
+  userId: string;
+  name: string;
+  company: string;
+  excludeId?: string;
+}) {
+  const normalizedName = input.name.trim();
+  const normalizedCompany = input.company.trim();
+
+  if (!normalizedName || !normalizedCompany) {
+    return null;
+  }
+
+  const db = await getDatabase();
+
+  if (!db) {
+    return (
+      mockContacts.find((item) => {
+        if (item.userId !== input.userId) {
+          return false;
+        }
+
+        if (input.excludeId && item.id === input.excludeId) {
+          return false;
+        }
+
+        return (
+          item.name.trim().toLowerCase() === normalizedName.toLowerCase() &&
+          item.company.trim().toLowerCase() === normalizedCompany.toLowerCase()
+        );
+      }) || null
+    );
+  }
+
+  const [rows] = await db.execute<ContactRow[]>(
+    `
+      SELECT
+        id, user_id, name, company, title, phone, email, address, website, note, card_image,
+        created_at, recognized_at
+      FROM contacts
+      WHERE user_id = ?
+        AND LOWER(TRIM(name)) = LOWER(TRIM(?))
+        AND LOWER(TRIM(company)) = LOWER(TRIM(?))
+        AND (? IS NULL OR id <> ?)
+      LIMIT 1
+    `,
+    [input.userId, normalizedName, normalizedCompany, input.excludeId || null, input.excludeId || null]
+  );
+
+  return rows[0] ? mapContact(rows[0]) : null;
+}
+
 export async function getContactCountByUser(userId: string) {
   const db = await getDatabase();
 

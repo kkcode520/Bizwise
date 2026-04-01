@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useMemo, useState, useTransition } from "react";
+import { ChangeEvent, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ScanResult } from "@/types";
 
@@ -56,8 +56,17 @@ async function optimizeImage(file: File) {
 
 export function CaptureForm() {
   const router = useRouter();
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string>("");
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [form, setForm] = useState<ScanResult>(initialForm);
+  const [duplicatePrompt, setDuplicatePrompt] = useState<{
+    id: string;
+    name: string;
+    company: string;
+    title: string;
+  } | null>(null);
   const [status, setStatus] = useState(
     "拍摄或上传商务名片后，系统会自动识别关键信息，并生成可编辑的联系人档案。"
   );
@@ -95,13 +104,30 @@ export function CaptureForm() {
   };
 
   const saveContact = async () => {
+    const payload = { ...form, cardImage: preview };
+
     const response = await fetch("/api/contacts", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ ...form, cardImage: preview }),
+      body: JSON.stringify(payload),
     });
+
+    if (response.status === 409) {
+      const result = (await response.json()) as {
+        duplicate?: { id: string; name: string; company: string; title: string };
+      };
+      const duplicate = result.duplicate;
+
+      if (!duplicate) {
+        setStatus("检测到重复联系人，但未拿到原记录信息，请稍后重试。");
+        return;
+      }
+
+      setDuplicatePrompt(duplicate);
+      return;
+    }
 
     if (!response.ok) {
       setStatus("保存失败，请先确认已登录，再重新尝试。");
@@ -112,20 +138,52 @@ export function CaptureForm() {
     router.push(`/contacts/${result.id}`);
   };
 
+  const resolveDuplicate = async (mode: "overwrite" | "create") => {
+    if (!duplicatePrompt) {
+      return;
+    }
+
+    const payload = { ...form, cardImage: preview };
+    const response = await fetch("/api/contacts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(
+        mode === "overwrite"
+          ? { ...payload, overwriteExistingId: duplicatePrompt.id }
+          : { ...payload, forceCreate: true }
+      ),
+    });
+
+    if (!response.ok) {
+      setStatus("重复联系人处理失败，请稍后重试。");
+      setDuplicatePrompt(null);
+      return;
+    }
+
+    const result = (await response.json()) as { id: string; mode: "create" | "overwrite" };
+    setDuplicatePrompt(null);
+    setStatus(result.mode === "overwrite" ? "已覆盖原有联系人记录。" : "已新增一条重复联系人记录。");
+    router.push(`/contacts/${result.id}`);
+  };
+
   return (
-    <div className="grid two-col">
-      <section className="panel" style={{ padding: 24, display: "grid", gap: 18 }}>
+    <>
+      <div className="grid two-col">
+        <section className="panel" style={{ padding: 24, display: "grid", gap: 18 }}>
         <div>
           <p className="eyebrow">Business Card</p>
           <h1 style={{ margin: "10px 0 0", fontSize: 36 }}>拍摄或上传商务名片</h1>
         </div>
 
         <p className="subtitle">
-          建议横向拍摄，确保姓名、公司与职位区域清晰。移动端可直接调用摄像头。
+          建议横向拍摄，确保姓名、公司与职位区域清晰。你可以直接拍照，也可以从相册中选择已有名片图片。
         </p>
 
-        <label
-          htmlFor="card-upload"
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
           style={{
             minHeight: 260,
             borderRadius: 24,
@@ -134,6 +192,8 @@ export function CaptureForm() {
             display: "grid",
             placeItems: "center",
             overflow: "hidden",
+            width: "100%",
+            padding: 0,
             cursor: "pointer",
           }}
         >
@@ -145,25 +205,32 @@ export function CaptureForm() {
             />
           ) : (
             <div style={{ textAlign: "center", padding: 24 }}>
-              <strong style={{ display: "block", fontSize: 18 }}>点击拍照或上传图片</strong>
-              <span style={{ color: "var(--muted)" }}>支持手机相机、相册和桌面拖拽选择</span>
+              <strong style={{ display: "block", fontSize: 18 }}>点击选择拍照或从相册上传</strong>
+              <span style={{ color: "var(--muted)" }}>手机端支持相机拍摄和相册选择，桌面端支持本地图片上传</span>
             </div>
           )}
-        </label>
+        </button>
 
         <input
-          id="card-upload"
+          ref={cameraInputRef}
           type="file"
           accept="image/*"
           capture="environment"
           onChange={handleFile}
           style={{ display: "none" }}
         />
+        <input
+          ref={galleryInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFile}
+          style={{ display: "none" }}
+        />
 
         <div className="pill">{isPending ? "处理中..." : status}</div>
-      </section>
+        </section>
 
-      <section className="panel" style={{ padding: 24, display: "grid", gap: 16 }}>
+        <section className="panel" style={{ padding: 24, display: "grid", gap: 16 }}>
         <div>
           <p className="eyebrow">Contact Details</p>
           <h2 style={{ margin: "10px 0 0", fontSize: 30 }}>识别结果确认</h2>
@@ -220,8 +287,122 @@ export function CaptureForm() {
             清空
           </button>
         </div>
-      </section>
-    </div>
+        </section>
+      </div>
+
+      {duplicatePrompt ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.28)",
+            display: "grid",
+            placeItems: "center",
+            padding: 20,
+            zIndex: 50,
+          }}
+        >
+          <div
+            className="panel"
+            style={{
+              width: "min(100%, 440px)",
+              padding: 24,
+              display: "grid",
+              gap: 14,
+            }}
+          >
+            <div>
+              <p className="eyebrow">Duplicate Contact</p>
+              <h3 style={{ margin: "8px 0 0", fontSize: 26 }}>检测到重复联系人</h3>
+            </div>
+            <p className="subtitle" style={{ margin: 0 }}>
+              已有联系人：{duplicatePrompt.name} / {duplicatePrompt.company} /{" "}
+              {duplicatePrompt.title || "未填写职位"}
+            </p>
+            <p className="subtitle" style={{ margin: 0 }}>
+              请选择操作：覆盖原记录、继续新建，或取消本次添加。
+            </p>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <button className="button" type="button" onClick={() => void resolveDuplicate("overwrite")}>
+                覆盖原记录
+              </button>
+              <button className="button ghost" type="button" onClick={() => void resolveDuplicate("create")}>
+                新建一条记录
+              </button>
+              <button
+                className="button ghost"
+                type="button"
+                onClick={() => {
+                  setDuplicatePrompt(null);
+                  setStatus("已取消本次添加。");
+                }}
+              >
+                取消添加
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pickerOpen ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.28)",
+            display: "grid",
+            placeItems: "center",
+            padding: 20,
+            zIndex: 49,
+          }}
+          onClick={() => setPickerOpen(false)}
+        >
+          <div
+            className="panel"
+            style={{
+              width: "min(100%, 420px)",
+              padding: 24,
+              display: "grid",
+              gap: 14,
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div>
+              <p className="eyebrow">Select Source</p>
+              <h3 style={{ margin: "8px 0 0", fontSize: 26 }}>选择名片来源</h3>
+            </div>
+            <p className="subtitle" style={{ margin: 0 }}>
+              你可以立即拍照，也可以从相册中选择已有名片图片。
+            </p>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <button
+                className="button"
+                type="button"
+                onClick={() => {
+                  setPickerOpen(false);
+                  cameraInputRef.current?.click();
+                }}
+              >
+                立即拍照
+              </button>
+              <button
+                className="button ghost"
+                type="button"
+                onClick={() => {
+                  setPickerOpen(false);
+                  galleryInputRef.current?.click();
+                }}
+              >
+                从相册选择
+              </button>
+              <button className="button ghost" type="button" onClick={() => setPickerOpen(false)}>
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 

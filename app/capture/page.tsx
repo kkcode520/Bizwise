@@ -1,4 +1,4 @@
-import { CaptureForm } from "@/components/capture-form";
+import { CaptureWorkspace } from "@/components/capture-workspace";
 import { SiteHeader } from "@/components/site-header";
 import { requireSessionUser } from "@/lib/auth";
 
@@ -9,7 +9,7 @@ export default async function CapturePage() {
     <>
       <SiteHeader />
       <main className="shell section">
-        <CaptureForm />
+        <CaptureWorkspace />
       </main>
     </>
   );
